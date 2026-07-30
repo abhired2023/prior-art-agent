@@ -1,4 +1,4 @@
-%%writefile pipeline.py
+
 import argparse
 import json
 import math
