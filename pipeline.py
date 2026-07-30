@@ -13,8 +13,8 @@ CANDIDATES_PER_QUERY = 50
 TOP_PERCENT_PER_QUERY = 0.20
 FINAL_SHORTLIST_SIZE = (15, 20)
 MIN_RELEVANCE_SCORE = 5  # candidates scoring below this never make the final shortlist,
-                          # even if we're short of the target count -- padding with
-                          # irrelevant results is worse than a shorter, clean list
+                          # even if we're short of the target count 
+                          
 
 
 def run_step1(invention_description, queries=None, model="llama3.1"):
