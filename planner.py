@@ -1,4 +1,4 @@
-%%writefile planner.py
+
 import json
 import re
 import sys
