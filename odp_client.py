@@ -1,4 +1,4 @@
-%%writefile odp_client.py
+
 import os
 import sys
 import json
