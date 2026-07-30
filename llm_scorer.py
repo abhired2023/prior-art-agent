@@ -1,4 +1,4 @@
-%%writefile llm_scorer.py
+
 import json
 import re
 from difflib import SequenceMatcher
