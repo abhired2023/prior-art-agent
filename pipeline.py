@@ -1,4 +1,3 @@
-
 import argparse
 import json
 import math
@@ -12,9 +11,9 @@ from dedupe import dedupe_pool
 CANDIDATES_PER_QUERY = 50
 TOP_PERCENT_PER_QUERY = 0.20
 FINAL_SHORTLIST_SIZE = (15, 20)
-MIN_RELEVANCE_SCORE = 5  # candidates scoring below this never make the final shortlist,
-                          
-                          
+MIN_RELEVANCE_SCORE = 5  # candidates scoring below this never make the final shortlist
+
+
 
 
 def run_step1(invention_description, queries=None, model="llama3.1"):
