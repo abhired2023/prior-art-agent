@@ -1,4 +1,3 @@
-
 import json
 import re
 import sys
@@ -7,8 +6,11 @@ import requests
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 
 
-def call_ollama(prompt: str, model: str = "llama3.1") -> str:
-    response = requests.post(OLLAMA_API_URL, json={"model": model, "prompt": prompt, "stream": False})
+def call_ollama(prompt: str, model: str = "llama3.1", temperature: float = 0.2) -> str:
+    response = requests.post(OLLAMA_API_URL, json={
+        "model": model, "prompt": prompt, "stream": False,
+        "options": {"temperature": temperature}
+    })
     response.raise_for_status()
     return response.json().get("response", "").strip()
 
@@ -36,27 +38,47 @@ def _extract_json_block(text: str):
     return try_parse(re.sub(r"[\r\n]+", " ", sliced))
 
 
-def get_plan(invention_description: str, model: str = "llama3.1", max_retries: int = 2) -> dict:
-    base_prompt = f"""You are a JSON-only model. Respond with ONLY a single valid JSON object, no explanation or markdown.
+def get_plan(invention_description: str, model: str = "llama3.1", max_retries: int = 3) -> dict:
+    base_prompt = f"""You are a patent researcher. Given an invention description, produce search queries for the USPTO Open Data Portal API.
 
-Given the following invention description:
-\"\"\"{invention_description}\"\"\"
+IMPORTANT: Queries must use this exact field-qualified format:
+  applicationMetaData.inventionTitle:"your phrase here"
 
-Return a JSON object with exactly these keys:
-- "concepts": array of strings
-- "queries": array of 3-5 strings, search queries to find similar prior art
-- "cpc_codes": array of strings, candidate CPC codes (e.g. "A61B5/145")
+Rules:
+- The phrase goes inside double quotes after the colon
+- Always append: AND applicationMetaData.applicationTypeLabelName:Utility
+- Use exactly 2 words per phrase, common patent-title terminology (e.g. "glucose monitoring", "wearable sensor") rather than specific/uncommon 3-4 word phrases, since shorter common phrases are more likely to literally appear in real patent titles
+- Produce 3 queries covering different technical angles of the invention
 
-JSON:"""
+Example output for "a solar-powered water purification device":
+{{
+  "concepts": ["solar water purification", "photovoltaic desalination", "UV water treatment"],
+  "queries": [
+    "applicationMetaData.inventionTitle:\\"solar water\\" AND applicationMetaData.applicationTypeLabelName:Utility",
+    "applicationMetaData.inventionTitle:\\"water purification\\" AND applicationMetaData.applicationTypeLabelName:Utility",
+    "applicationMetaData.inventionTitle:\\"water treatment\\" AND applicationMetaData.applicationTypeLabelName:Utility"
+  ],
+  "cpc_codes": ["C02F1/30", "C02F1/32"]
+}}
+
+Invention: "{invention_description}"
+
+Respond with ONLY valid JSON, no other text."""
+
+    strict_suffix = "\n\nYour queries MUST start with applicationMetaData.inventionTitle and contain quoted 2-word phrases. Do not write plain English sentences or phrases longer than 2 words."
+
     prompt = base_prompt
     raw = ""
     for attempt in range(max_retries + 1):
         raw = call_ollama(prompt, model=model)
         parsed = _extract_json_block(raw)
         if parsed is not None and all(k in parsed for k in ("concepts", "queries", "cpc_codes")):
-            return parsed
-        prompt = base_prompt + "\n\nIMPORTANT: previous response was not valid JSON. Output raw JSON only."
-    raise ValueError(f"Model did not return valid JSON after {max_retries + 1} attempts.\nRaw:\n{raw}\nRepr:\n{raw!r}")
+            queries_ok = all(q.strip().startswith("applicationMetaData.inventionTitle") for q in parsed["queries"])
+            if queries_ok:
+                return parsed
+            print(f"  NOTE: attempt {attempt+1} returned plain-English queries, retrying with stricter instruction.")
+        prompt = base_prompt + strict_suffix
+    raise ValueError(f"Model did not return valid field-qualified queries after {max_retries + 1} attempts.\nRaw:\n{raw}")
 
 
 if __name__ == "__main__":
