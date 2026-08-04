@@ -1,4 +1,3 @@
-
 import os
 import sys
 import json
@@ -28,35 +27,26 @@ def _dig_cpc_codes(meta: dict):
     return []
 
 
-def _build_query_string(query: str, broad: bool = False) -> str:
-    query = query.strip().strip('"').strip("'").strip()
-    if not broad:
-        return f'applicationMetaData.inventionTitle:"{query}"'
-    stopwords = {"a", "an", "the", "for", "of", "in", "on", "and", "or", "to", "with"}
-    terms = [w for w in query.split() if w.lower() not in stopwords]
-    if not terms:
-        terms = query.split()
-    return f'applicationMetaData.inventionTitle:({" OR ".join(terms)})'
-
-
 def search_patents(query: str, limit: int = 50, offset: int = 0):
     if not USPTO_API_KEY:
         raise ValueError("Set USPTO_API_KEY.")
     headers = {"Accept": "application/json", "X-API-KEY": USPTO_API_KEY}
 
-    def do_request(q_string):
-        params = {"q": q_string, "offset": offset, "limit": limit}
-        return requests.get(SEARCH_URL, params=params, headers=headers)
+    # If the planner already produced a fully field-qualified query string
+    # (applicationMetaData.inventionTitle:"..." AND ...Utility), use it
+    # exactly as-is -- no broadening fallback, since loose OR-of-words
+    # matching was the actual source of irrelevant results (e.g. matching
+    # on the single word "management" across unrelated patents).
+    q_string = query.strip()
+    if not q_string.startswith("applicationMetaData."):
+        q_string = f'applicationMetaData.inventionTitle:"{q_string}"'
 
-    used_broad = False
-    response = do_request(_build_query_string(query, broad=False))
-    if response.status_code == 404:
-        used_broad = True
-        response = do_request(_build_query_string(query, broad=True))
+    response = requests.get(SEARCH_URL, params={"q": q_string, "offset": offset, "limit": limit}, headers=headers)
+
     if response.status_code == 404:
         return []
     if response.status_code != 200:
-        raise RuntimeError(f"ODP returned HTTP {response.status_code} for '{query}':\n{response.text[:500]}")
+        raise RuntimeError(f"ODP returned HTTP {response.status_code} for '{q_string}':\n{response.text[:500]}")
 
     data = response.json()
     results = []
@@ -68,26 +58,11 @@ def search_patents(query: str, limit: int = 50, offset: int = 0):
             "publication_number": meta.get("earliestPublicationNumber"),
             "cpc_codes": _dig_cpc_codes(meta),
             "filing_date": meta.get("filingDate"),
-            "matched_broad": used_broad,
         })
     return results
 
 
-def inspect_raw(query: str, limit: int = 1):
-    headers = {"Accept": "application/json", "X-API-KEY": USPTO_API_KEY}
-    response = requests.get(SEARCH_URL, params={"q": _build_query_string(query), "offset": 0, "limit": limit}, headers=headers)
-    print(f"HTTP {response.status_code}")
-    data = response.json()
-    bag = data.get("patentFileWrapperDataBag", [])
-    print(json.dumps(bag[0], indent=2) if bag else json.dumps(data, indent=2))
-
-
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        sys.exit(1)
-    if "--inspect" in sys.argv:
-        inspect_raw(" ".join(a for a in sys.argv[1:] if a != "--inspect"))
-        sys.exit(0)
     query = " ".join(sys.argv[1:])
     hits = search_patents(query)
     print(f"\n{len(hits)} results for '{query}':\n")
