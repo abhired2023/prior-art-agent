@@ -15,8 +15,7 @@ REQUEST_DELAY_SECONDS = 1.5
 def normalize_patent_id(publication_number: str) -> str:
     if not publication_number:
         return None
-    cleaned = re.sub(r"[\s\-/]", "", publication_number)
-    return cleaned.upper()
+    return re.sub(r"[\s\-/]", "", publication_number).upper()
 
 
 def build_url(patent_id: str) -> str:
@@ -44,7 +43,7 @@ def scrape_one(patent_id: str):
     result["abstract"] = abstract_div.text(strip=True) if abstract_div else None
 
     if not result["abstract"]:
-        result["error"] = "No <div class='abstract'> found -- may be a design patent or different page structure."
+        result["error"] = "No abstract found -- design patent or not indexed on Google Patents yet."
 
     return result
 
@@ -84,8 +83,6 @@ def scrape_shortlist(shortlist_path: str = "shortlist.json", output_path: str = 
 
     ok_count = sum(1 for r in results if r["abstract"])
     print(f"\nDone. {ok_count}/{len(results)} abstracts scraped successfully -> {output_path}")
-    if ok_count < len(results):
-        print(f"{len(results) - ok_count} entries had no abstract -- check 'error' field for each.")
 
     return results
 
