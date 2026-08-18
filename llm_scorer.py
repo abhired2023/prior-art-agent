@@ -1,19 +1,9 @@
 import json
 import re
 from difflib import SequenceMatcher
-import requests
+from llm_client import call_llm
 
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
-SCORE_SUB_BATCH_SIZE = 12  # scoring 50 at once made the model lose track of which score went with which patent
-
-
-def call_ollama(prompt: str, model: str = "llama3.1", temperature: float = 0.2) -> str:
-    response = requests.post(OLLAMA_API_URL, json={
-        "model": model, "prompt": prompt, "stream": False,
-        "options": {"temperature": temperature}
-    })
-    response.raise_for_status()
-    return response.json().get("response", "").strip()
+SCORE_SUB_BATCH_SIZE = 12
 
 
 def _extract_json_array(text: str):
@@ -40,7 +30,6 @@ def _extract_json_array(text: str):
 
 
 def _title_matches(claimed, actual):
-    # catches cases where the model's score got mismatched to the wrong patent
     if not claimed or not actual:
         return False
     claimed, actual = claimed.lower().strip(), actual.lower().strip()
@@ -80,7 +69,8 @@ Include one entry for every id from 0 to {len(sub_records) - 1}. JSON array:"""
     prompt = base_prompt
     parsed, raw = None, ""
     for attempt in range(max_retries + 1):
-        raw = call_ollama(prompt, model=model)
+        kwargs = {"model": model} if model else {}
+        raw = call_llm(prompt, **kwargs)
         parsed = _extract_json_array(raw)
         if parsed is not None:
             break
@@ -106,7 +96,7 @@ Include one entry for every id from 0 to {len(sub_records) - 1}. JSON array:"""
     return sub_records
 
 
-def score_batch(invention_description: str, records: list, model: str = "llama3.1", max_retries: int = 2):
+def score_batch(invention_description: str, records: list, model: str = None, max_retries: int = 2):
     if not records:
         return records
 
