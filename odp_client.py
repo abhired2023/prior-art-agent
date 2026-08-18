@@ -6,7 +6,6 @@ import requests
 SEARCH_URL = "https://api.uspto.gov/api/v1/patent/applications/search"
 USPTO_API_KEY = os.environ.get("USPTO_API_KEY", "")
 
-# not 100% sure this is the right field name from the docs alone -- run --inspect to confirm
 CPC_FIELD_CANDIDATES = ["cpcClassificationBag", "cpcCodeBag", "classificationBag"]
 
 
